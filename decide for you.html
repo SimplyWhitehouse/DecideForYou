@@ -19,17 +19,13 @@
 				padding: 10px;
 				grid-row-gap: 0.5em; 
 			}
-
-			.options * {
-				grid-column: 2;
-			}
 			
 			.option {
 				--borderVal: 1px;
+				grid-column: 2;
 				display: grid;
-				grid-template-columns: 1fr;
-				grid-row-gap: 0.5em;
-				border: solid 1px;
+				grid-template-columns: repeat(4, auto);
+				grid-column-gap: 0.3em;
 				padding: 5px;
 				border-radius: var(--myBorderRadius);
 				background: white;
@@ -37,34 +33,38 @@
 			}
 			
 			.inp {
-				border: var(--borderVal);
-				outline: none;
 				margin: 0;
 				font-size: 1em;
-				text-align: right;
-			}
-			
-			.debtName {
-				font-size: 1em;
-				border-width: 1px;
-				border-color: black;
-				padding-left: 5px;
+				outline: none;
+				border: solid 1px;
 				border-radius: var(--myBorderRadius);
 				text-align: center;
 			}
 			
 			.delete {
-				font-size: 1em;
-				border: solid;
-				border-width: 1px;
-				border-color: black;
-				border-radius: var(--myBorderRadius);
-				text-align: center;
 				background: #F33;
 				cursor: pointer;
 			}
 			
-			#btn_addDebt {
+			.verticalLine {
+				border-left: solid 2px;
+				border-color: #CCC;
+			}
+			.weight .inp, .optionName .inp{
+				margin-left: 0.1em;
+			}
+			.weight .inp{
+				width: 3em;
+			}
+			input::-webkit-outer-spin-button,
+			input::-webkit-inner-spin-button {
+			    /* display: none; <- Crashes Chrome on hover */
+			    -webkit-appearance: none;
+			    margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
+			}
+			
+
+			#btn_addOption {
 				font-size: 1em;
 				border-radius: var(--myBorderRadius);
 				cursor: pointer;
@@ -83,20 +83,18 @@
 		<script src="https://rawgit.com/c3js/c3/master/c3.min.js"></script>
 	</head>
 	<body>
-		<center class="cntr title">
+		<center class="cntr">
 			<h2>Options</h2>
 			<div id="div_options" class="options">
 			</div>
-			<p></p>
 			<button id="btn_addOption">ADD</button>
-			<p></p>
-			<hr/>
 			<div>
 				<style>
 					@import url("https://rawgit.com/c3js/c3/master/c3.min.css");
 				</style>
 				<div id="chart"></div>
 			</div>
+			<div>
 		</center>
 		<script>
 
@@ -129,19 +127,14 @@ function makeOptionElement(){
 	const markdown =
 	`
 	<div class="option">
-		<input class="optionName" placeholder="Name"/>
-		<span>
-			<span class="money">
-				<span>$</span>
-				<input class="inp" value="0.00" data-type="money"/>
-			</span>
-			at
-			<span class="percent">
-				<input class="inp" value="0.00" data-type="percent"/>
-				<span>%</span>
-			</span>
+		<span class="optionName">
+			Name:<input class="inp" placeholder="Name"/>
 		</span>
-		<button class="delete inp" tabindex="-1">Delete</button>
+		<span class="verticalLine"></span>
+		<span class="weight">
+			Weight:<input class="inp" type="number" value="1" min="1"/>
+		</span>
+		<button class="delete inp" tabindex="-1">X</button>
 	</div>
 	`;
 	const el = strToHTML(markdown);
@@ -155,17 +148,17 @@ function strToHTML(str){
 	wrapper.innerHTML = str;
 	return wrapper.children[0];
 }
-var queryForInputs = ".option input";
-function addHandlersToOption(div_option){
+function addHandlersToOption(option){
 	// Formatting the inputs after timeout or on blur
-	div_option.querySelectorAll(queryForInputs)
+	option.querySelectorAll(".inp")
 	.forEach(el => {
 		el.oninput = makeUpdateCallback(2000);
+		el.onchange = makeUpdateCallback(0);
 		el.onblur = makeUpdateCallback(0);
 	});
 	
 	// Delete Button
-	const btn_del = div_option.querySelector(".delete")
+	const btn_del = option.querySelector(".delete")
 	btn_del.onclick = () => handleDeleteOptionClick(btn_del);
 }
 function addOptionToPage(option){
@@ -178,42 +171,42 @@ function removeOptionElement(btn){
 
 // Get information about the debts
 function getAllOptions(){
-	return Array.from(document.querySelectorAll(".option")) // get the debt DOM elements
-	.map(optionToObj); // convert to objects
-}
-function optionToObj(option){
-	const val = parseFloat(formatFromMoney(option.querySelector(".value").value));
-	const name = option.querySelector(".optionName").value;
-	return {
-		"value": val,
-		"name" : name
-	};
+	let options = {};
+	Array.from(document.querySelectorAll(".option")) // get the debt DOM elements
+	.forEach(option => {
+		const name = option.querySelector(".optionName .inp").value;
+		const weight = parseFloat(option.querySelector(".weight .inp").value);
+		options[name] = weight;
+	});
+	return options;
 }
 
-function snowballToChartData(snowball){
+function optionsToChartData(options){
 	const data = {
 		unload: true, // Unload previously stored data
 		columns: []
 	};
-	// Add xs
-	data.columns.push(['xs'].concat(snowball.xs));
 
 	// Do the rest of the debts
-	for (debtName in snowball.debts){
+	for (name in options){
 		let arr = [];
-		arr.push(debtName);
-		arr = arr.concat(snowball.debts[debtName]);
+		arr.push(name);
+		arr = arr.concat(options[name]);
 		data.columns.push(arr);
 	}
 	return data;
 }
 
+function updateChartData(data){
+	chart.load(data);
+}
+
 // Chart manipulation
-function updateChartTitle(snowball){
+function setChartTitle(str){
 	d3.select(".c3-title")
 	.style("dominant-baseline", "hanging")
     .style("font-size", "1.75em")
-    .text(``);
+    .text(str);
 }
 /*****************/
 /*** END UTILS ***/
@@ -226,10 +219,9 @@ function updateChartTitle(snowball){
 /****************************/
 
 function updateResults(){
-	reformatInputs();
-	const currDebts = getAllOptions();
-	const debtSnowball = produceSnowballFromDebts(currDebts);
-	updateChartFromSnowball(debtSnowball);
+	const options = getAllOptions();
+	const data = optionsToChartData(options);
+	updateChartData(data);
 }
 
 function handleAddOptionClick(){
@@ -255,11 +247,6 @@ function handleDeleteOptionClick(btn){
 // The inputs and their callbacks
 document.getElementById("btn_addOption").onclick = handleAddOptionClick;
 
-document.querySelectorAll(queryForInputs)
-.forEach(el => {
-	el.onchange = makeUpdateCallback(2000);
-	el.onblur = makeUpdateCallback(0);
-});
 
 /* This is meant to color things so they match the theme of the page... It may not be applicable *
 (function(){
