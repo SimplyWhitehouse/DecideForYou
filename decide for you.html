@@ -50,17 +50,32 @@
 				border-left: solid 2px;
 				border-color: #CCC;
 			}
-			.weight .inp, .optionName .inp{
-				margin-left: 0.1em;
+
+			.weight {
+				display: grid;
+				grid-template-columns: auto auto;
 			}
-			.weight .inp{
-				width: 3em;
+			.weight input{
+				width: 2.5em;
 			}
 			input::-webkit-outer-spin-button,
 			input::-webkit-inner-spin-button {
 			    /* display: none; <- Crashes Chrome on hover */
 			    -webkit-appearance: none;
 			    margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
+			}
+			.weightInput {
+				display: grid;
+				grid-template-columns: 1fr auto 1fr;
+			}
+			.weightInput input{
+				border-radius: 0;
+			}
+			.minus {
+				border-radius: var(--myBorderRadius) 0 0 var(--myBorderRadius);
+			}
+			.plus {
+				border-radius: 0 var(--myBorderRadius) var(--myBorderRadius) 0;
 			}
 			
 
@@ -120,6 +135,14 @@ function makeUpdateCallback(time){
 		prevTO = window.setTimeout(updateResults, time || 0)
 	};
 }
+function clampInputs(){
+	document.querySelectorAll(".weight input")
+	.forEach(el => {
+		const val = parseFloat(el.value);
+		if (val > 0) return;
+		el.value = 1;
+	});
+}
 
 // Debt Element manipulation
 function makeOptionElement(){
@@ -128,11 +151,16 @@ function makeOptionElement(){
 	`
 	<div class="option">
 		<span class="optionName">
-			Name:<input class="inp" placeholder="Name"/>
+			Name:&nbsp;<input class="inp" placeholder="Name"/>
 		</span>
 		<span class="verticalLine"></span>
 		<span class="weight">
-			Weight:<input class="inp" type="number" value="1" min="1"/>
+			Weight:&nbsp;
+			<span class="weightInput">
+				<button class="minus inp" value="-1">-</button>
+				<input class="inp" type="number" value="1" min="1"/>
+				<button class="plus inp" value="1">+</button>
+			</span>
 		</span>
 		<button class="delete inp" tabindex="-1">X</button>
 	</div>
@@ -153,13 +181,26 @@ function addHandlersToOption(option){
 	option.querySelectorAll(".inp")
 	.forEach(el => {
 		el.oninput = makeUpdateCallback(2000);
-		el.onchange = makeUpdateCallback(0);
 		el.onblur = makeUpdateCallback(0);
+	});
+
+	// Plus and Minus
+	option.querySelectorAll(".plus, .minus")
+	.forEach(el => {
+		el.onclick = handlePlusMinusClick;
 	});
 	
 	// Delete Button
 	const btn_del = option.querySelector(".delete")
 	btn_del.onclick = () => handleDeleteOptionClick(btn_del);
+}
+function handlePlusMinusClick(ev){
+	const el = ev.currentTarget;
+	const input = el.parentNode.querySelector("input");
+	const val = parseFloat(input.value) + parseFloat(el.value);
+	if (val == 0) return;
+	input.value = val;
+	makeUpdateCallback(0)();
 }
 function addOptionToPage(option){
 	document.getElementById("div_options").appendChild(option);
@@ -174,8 +215,10 @@ function getAllOptions(){
 	let options = {};
 	Array.from(document.querySelectorAll(".option")) // get the debt DOM elements
 	.forEach(option => {
-		const name = option.querySelector(".optionName .inp").value;
-		const weight = parseFloat(option.querySelector(".weight .inp").value);
+		const name = option.querySelector(".optionName input").value;
+		if (name.trim().length == 0) return;
+
+		const weight = parseFloat(option.querySelector(".weight input").value);
 		options[name] = weight;
 	});
 	return options;
@@ -197,9 +240,7 @@ function optionsToChartData(options){
 	return data;
 }
 
-function updateChartData(data){
-	chart.load(data);
-}
+
 
 // Chart manipulation
 function setChartTitle(str){
@@ -207,6 +248,9 @@ function setChartTitle(str){
 	.style("dominant-baseline", "hanging")
     .style("font-size", "1.75em")
     .text(str);
+}
+function updateChartData(data){
+	chart.load(data);
 }
 /*****************/
 /*** END UTILS ***/
@@ -219,6 +263,7 @@ function setChartTitle(str){
 /****************************/
 
 function updateResults(){
+	clampInputs()
 	const options = getAllOptions();
 	const data = optionsToChartData(options);
 	updateChartData(data);
@@ -311,7 +356,7 @@ chart.legend.show(['data1', 'data2']) // show legends for data1 and data2
 
 // Simulate adding a debt so there is one
 handleAddOptionClick();
-//chart.legend.hide();
+chart.unload();
 /*************************/
 /*** END GENERAL SETUP ***/
 /*************************/
