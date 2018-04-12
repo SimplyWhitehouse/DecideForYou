@@ -1,0 +1,333 @@
+<html>
+	<head>
+		<style>
+			:root {
+				--myBorderRadius: 0.3em;
+			}
+
+			body {
+				background: #EEE;
+			}
+			
+			.cntr {
+				font-size: 1.3em;
+			}
+			
+			.options {
+				display: grid;
+				grid-template-columns: 1fr auto 1fr;
+				padding: 10px;
+				grid-row-gap: 0.5em; 
+			}
+
+			.options * {
+				grid-column: 2;
+			}
+			
+			.option {
+				--borderVal: 1px;
+				display: grid;
+				grid-template-columns: 1fr;
+				grid-row-gap: 0.5em;
+				border: solid 1px;
+				padding: 5px;
+				border-radius: var(--myBorderRadius);
+				background: white;
+				/*margin: 15px auto;*/
+			}
+			
+			.inp {
+				border: var(--borderVal);
+				outline: none;
+				margin: 0;
+				font-size: 1em;
+				text-align: right;
+			}
+			
+			.debtName {
+				font-size: 1em;
+				border-width: 1px;
+				border-color: black;
+				padding-left: 5px;
+				border-radius: var(--myBorderRadius);
+				text-align: center;
+			}
+			
+			.delete {
+				font-size: 1em;
+				border: solid;
+				border-width: 1px;
+				border-color: black;
+				border-radius: var(--myBorderRadius);
+				text-align: center;
+				background: #F33;
+				cursor: pointer;
+			}
+			
+			#btn_addDebt {
+				font-size: 1em;
+				border-radius: var(--myBorderRadius);
+				cursor: pointer;
+			}
+
+			#chart svg{
+				background: #FFF;
+			}
+
+			.c3-title {
+				font-size: 2em;
+			}
+
+		</style>
+		<script src="https://d3js.org/d3.v5.min.js"></script>
+		<script src="https://rawgit.com/c3js/c3/master/c3.min.js"></script>
+	</head>
+	<body>
+		<center class="cntr title">
+			<h2>Options</h2>
+			<div id="div_options" class="options">
+			</div>
+			<p></p>
+			<button id="btn_addOption">ADD</button>
+			<p></p>
+			<hr/>
+			<div>
+				<style>
+					@import url("https://rawgit.com/c3js/c3/master/c3.min.css");
+				</style>
+				<div id="chart"></div>
+			</div>
+		</center>
+		<script>
+
+/*******************/
+/*** START UTILS ***/
+/*******************/
+
+// Manipulate Generic Elements
+function getVal(id){
+	return parseFloat(formatFromMoney(document.getElementById(id).value));
+}
+function setText(id, str){
+	const el = document.getElementById(id);
+	el.innerText = str;
+	el.value = str;
+}
+
+// Formatting
+let prevTO = 0;
+function makeUpdateCallback(time){
+	return () => {
+		window.clearTimeout(prevTO);
+		prevTO = window.setTimeout(updateResults, time || 0)
+	};
+}
+
+// Debt Element manipulation
+function makeOptionElement(){
+	
+	const markdown =
+	`
+	<div class="option">
+		<input class="optionName" placeholder="Name"/>
+		<span>
+			<span class="money">
+				<span>$</span>
+				<input class="inp" value="0.00" data-type="money"/>
+			</span>
+			at
+			<span class="percent">
+				<input class="inp" value="0.00" data-type="percent"/>
+				<span>%</span>
+			</span>
+		</span>
+		<button class="delete inp" tabindex="-1">Delete</button>
+	</div>
+	`;
+	const el = strToHTML(markdown);
+
+	addHandlersToOption(el);
+
+	return el;
+}
+function strToHTML(str){
+	const wrapper = document.createElement("div");
+	wrapper.innerHTML = str;
+	return wrapper.children[0];
+}
+var queryForInputs = ".option input";
+function addHandlersToOption(div_option){
+	// Formatting the inputs after timeout or on blur
+	div_option.querySelectorAll(queryForInputs)
+	.forEach(el => {
+		el.oninput = makeUpdateCallback(2000);
+		el.onblur = makeUpdateCallback(0);
+	});
+	
+	// Delete Button
+	const btn_del = div_option.querySelector(".delete")
+	btn_del.onclick = () => handleDeleteOptionClick(btn_del);
+}
+function addOptionToPage(option){
+	document.getElementById("div_options").appendChild(option);
+}
+function removeOptionElement(btn){
+	btn.parentNode.remove();
+}
+
+
+// Get information about the debts
+function getAllOptions(){
+	return Array.from(document.querySelectorAll(".option")) // get the debt DOM elements
+	.map(optionToObj); // convert to objects
+}
+function optionToObj(option){
+	const val = parseFloat(formatFromMoney(option.querySelector(".value").value));
+	const name = option.querySelector(".optionName").value;
+	return {
+		"value": val,
+		"name" : name
+	};
+}
+
+function snowballToChartData(snowball){
+	const data = {
+		unload: true, // Unload previously stored data
+		columns: []
+	};
+	// Add xs
+	data.columns.push(['xs'].concat(snowball.xs));
+
+	// Do the rest of the debts
+	for (debtName in snowball.debts){
+		let arr = [];
+		arr.push(debtName);
+		arr = arr.concat(snowball.debts[debtName]);
+		data.columns.push(arr);
+	}
+	return data;
+}
+
+// Chart manipulation
+function updateChartTitle(snowball){
+	d3.select(".c3-title")
+	.style("dominant-baseline", "hanging")
+    .style("font-size", "1.75em")
+    .text(``);
+}
+/*****************/
+/*** END UTILS ***/
+/*****************/
+
+
+
+/****************************/
+/*** START BUSINESS LOGIC ***/
+/****************************/
+
+function updateResults(){
+	reformatInputs();
+	const currDebts = getAllOptions();
+	const debtSnowball = produceSnowballFromDebts(currDebts);
+	updateChartFromSnowball(debtSnowball);
+}
+
+function handleAddOptionClick(){
+	const debt = makeOptionElement();
+	addOptionToPage(debt);
+}
+
+function handleDeleteOptionClick(btn){
+	removeOptionElement(btn);
+	updateResults();
+}
+
+/**************************/
+/*** END BUSINESS LOGIC ***/
+/**************************/
+
+
+
+/***************************/
+/*** START GENERAL SETUP ***/
+/***************************/
+
+// The inputs and their callbacks
+document.getElementById("btn_addOption").onclick = handleAddOptionClick;
+
+document.querySelectorAll(queryForInputs)
+.forEach(el => {
+	el.onchange = makeUpdateCallback(2000);
+	el.onblur = makeUpdateCallback(0);
+});
+
+/* This is meant to color things so they match the theme of the page... It may not be applicable *
+(function(){
+	const svg = document.querySelector(".nav-toggle-label svg");
+	const header = document.getElementById("headerAnnouncementWrapper");
+	const svgStrokeColor = !!svg ? window.getComputedStyle(svg, null).stroke : "#7c0404";	// Dark Red
+	const titleColor = !!header ? window.getComputedStyle(header, null).color : "#01044b";	// Dark Blue
+	const titleBG = "#d5d7f1";	// Light Blue
+
+	const inputs = document.querySelectorAll("input.inp");
+	for (i of inputs){
+		i.oninput = makeUpdateCallback(2000);
+		i.onblur = makeUpdateCallback(0);
+		i.style.color = titleColor;
+		i.style.background = titleBG;
+	}
+
+	const spans = document.querySelectorAll("span.res");
+	for (i of spans){
+		i.style.color = svgStrokeColor; 
+	}
+
+
+})()
+/* */
+
+//https://jsfiddle.net/8aL1stcs/66/
+var chart = c3.generate({
+    bindto: '#chart',
+    data: {
+    	type: "pie",
+    	columns: [
+			['Add An Option', 1]
+		]
+	},
+	legend: {
+		item: {
+			onclick: function(){}
+		}
+	}
+});
+
+/*
+// Add/Update lines
+chart.load({
+	columns: [
+		['xs', 300, 100, 250, 150, 300, 150, 500],
+		['Amount', 100, 200, 150, 50, 100, 250]
+	]
+});
+
+// Remove lines
+chart.unload({
+	ids: ['Amount', 'xs']
+});
+
+// Show the legend
+chart.legend.show() // show all legends
+chart.legend.show('data1') // show legend for data1
+chart.legend.show(['data1', 'data2']) // show legends for data1 and data2
+*/
+
+// Simulate adding a debt so there is one
+handleAddOptionClick();
+//chart.legend.hide();
+/*************************/
+/*** END GENERAL SETUP ***/
+/*************************/
+		</script>
+	</body>
+</html>
