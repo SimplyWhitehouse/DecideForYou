@@ -79,13 +79,13 @@
 			}
 
 
-			.selection {
+			.mySelection {
 				padding-top: 10px;
 			}
-			.selection button{
+			.mySelection button{
 				font-size: 1em;
 			}
-			.selection .result {
+			.mySelection .myResult {
 				font-size: 3em;
 			}
 			
@@ -123,9 +123,9 @@
 				</style>
 				<div id="chart"></div>
 			</div>
-			<div class="selection">
+			<div class="mySelection">
 				<button id="btn_select">Make Selection</button>
-				<div class="result"></div>
+				<p class="myResult"></p>
 			</div>
 		</center>
 		<script>
@@ -294,7 +294,7 @@ function updateChartData(data){
 	chart.load(data);
 }
 function setSelectionTitle(str){
-	document.querySelector(".selection .result").innerText = str;
+	document.querySelector(".mySelection .myResult").innerText = str;
 }
 /*****************/
 /*** END UTILS ***/
